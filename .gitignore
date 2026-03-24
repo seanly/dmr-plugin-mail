@@ -1,0 +1,21 @@
+# Binary (local / install)
+/dmr-plugin-mail
+/dmr-plugin-mail-*
+/mail-smtp-demo
+/mail-imap-demo
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+coverage.out
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
