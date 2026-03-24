@@ -15,7 +15,10 @@ import (
 	"github.com/emersion/go-message"
 )
 
-const maxMailListLimit = 200
+const (
+	maxMailListLimit   = 200
+	maxMailModifyUIDs  = 50 // per mailDelete / mailMove call
+)
 
 func (p *MailPlugin) imapConnect() (*client.Client, error) {
 	addr := net.JoinHostPort(p.cfg.IMAPHost, strconv.Itoa(p.cfg.IMAPPort))
@@ -286,6 +289,141 @@ func (p *MailPlugin) execMailRead(args map[string]any) (any, error) {
 		res["date"] = env.Date.Format(time.RFC3339)
 	}
 	return res, nil
+}
+
+func parseMailUIDs(args map[string]any) ([]uint32, error) {
+	v, ok := args["uids"]
+	if !ok || v == nil {
+		return nil, fmt.Errorf("uids is required (non-empty array)")
+	}
+	arr, ok := v.([]any)
+	if !ok {
+		return nil, fmt.Errorf("uids must be a JSON array of integers")
+	}
+	seen := make(map[uint32]struct{}, len(arr))
+	var out []uint32
+	for _, e := range arr {
+		u, err := anyToUint32(e)
+		if err != nil {
+			return nil, fmt.Errorf("uids: %w", err)
+		}
+		if u == 0 {
+			return nil, fmt.Errorf("uids: uid must be positive")
+		}
+		if _, dup := seen[u]; dup {
+			continue
+		}
+		seen[u] = struct{}{}
+		out = append(out, u)
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("uids is required (non-empty array)")
+	}
+	if len(out) > maxMailModifyUIDs {
+		return nil, fmt.Errorf("uids: at most %d per call (got %d)", maxMailModifyUIDs, len(out))
+	}
+	slices.Sort(out)
+	return out, nil
+}
+
+func anyToUint32(e any) (uint32, error) {
+	switch x := e.(type) {
+	case float64:
+		if x < 0 || x > 0xffffffff || x != float64(uint32(x)) {
+			return 0, fmt.Errorf("invalid uid %v", e)
+		}
+		return uint32(x), nil
+	case int:
+		if x < 0 || x > 0xffffffff {
+			return 0, fmt.Errorf("invalid uid %v", e)
+		}
+		return uint32(x), nil
+	case int64:
+		if x < 0 || x > 0xffffffff {
+			return 0, fmt.Errorf("invalid uid %v", e)
+		}
+		return uint32(x), nil
+	default:
+		return 0, fmt.Errorf("invalid uid type %T", e)
+	}
+}
+
+func (p *MailPlugin) execMailDelete(args map[string]any) (any, error) {
+	folder := strings.TrimSpace(stringArg(args, "folder"))
+	if folder == "" {
+		folder = p.cfg.IMAPFolderDefault
+	}
+	uids, err := parseMailUIDs(args)
+	if err != nil {
+		return nil, err
+	}
+
+	c, err := p.imapConnect()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = c.Logout() }()
+
+	if _, err := c.Select(folder, false); err != nil {
+		return nil, fmt.Errorf("imap select %q: %w", folder, err)
+	}
+
+	seq := new(imap.SeqSet)
+	seq.AddNum(uids...)
+	item := imap.FormatFlagsOp(imap.AddFlags, true)
+	val := []interface{}{imap.DeletedFlag}
+	if err := c.UidStore(seq, item, val, nil); err != nil {
+		return nil, fmt.Errorf("imap uid store \\Deleted: %w", err)
+	}
+	if err := c.Expunge(nil); err != nil {
+		return nil, fmt.Errorf("imap expunge: %w", err)
+	}
+
+	return map[string]any{
+		"ok":     true,
+		"folder": folder,
+		"uids":   uids,
+		"count":  len(uids),
+	}, nil
+}
+
+func (p *MailPlugin) execMailMove(args map[string]any) (any, error) {
+	folder := strings.TrimSpace(stringArg(args, "folder"))
+	if folder == "" {
+		folder = p.cfg.IMAPFolderDefault
+	}
+	target := strings.TrimSpace(stringArg(args, "targetFolder"))
+	if target == "" {
+		return nil, fmt.Errorf("targetFolder is required")
+	}
+	uids, err := parseMailUIDs(args)
+	if err != nil {
+		return nil, err
+	}
+
+	c, err := p.imapConnect()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = c.Logout() }()
+
+	if _, err := c.Select(folder, false); err != nil {
+		return nil, fmt.Errorf("imap select %q: %w", folder, err)
+	}
+
+	seq := new(imap.SeqSet)
+	seq.AddNum(uids...)
+	if err := c.UidMove(seq, target); err != nil {
+		return nil, fmt.Errorf("imap uid move: %w", err)
+	}
+
+	return map[string]any{
+		"ok":            true,
+		"folder":        folder,
+		"targetFolder":  target,
+		"uids":          uids,
+		"count":         len(uids),
+	}, nil
 }
 
 func imapDateUTC(t time.Time) time.Time {

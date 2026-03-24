@@ -1,4 +1,4 @@
-# DMR opa_policy add-on for dmr-plugin-mail tools (mailSend, mailList, mailRead).
+# DMR opa_policy add-on for dmr-plugin-mail tools (mailSend, mailList, mailRead, mailMove, mailDelete).
 #
 # Load next to the embedded default policy, e.g. in your DMR YAML:
 #
@@ -29,6 +29,10 @@ allowed_recipient_domains := {
 
 # If true, mailRead calls need human approval (mailList stays on default.rego only).
 mail_read_require_approval := false
+
+# IMAP write tools: strongly recommended true (destructive / high impact).
+mail_move_require_approval := true
+mail_delete_require_approval := true
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -97,3 +101,21 @@ decision = {"action": "require_approval", "reason": reason_with_scope("mail read
 	input.tool == "mailRead"
 	mail_read_require_approval
 }
+
+# ---------------------------------------------------------------------------
+# mailMove / mailDelete (IMAP)
+# ---------------------------------------------------------------------------
+
+decision = {"action": "require_approval", "reason": reason_with_scope("mail move"), "risk": "high"} if {
+	input.tool == "mailMove"
+	mail_move_require_approval
+}
+
+decision = {"action": "require_approval", "reason": reason_with_scope("mail delete"), "risk": "high"} if {
+	input.tool == "mailDelete"
+	mail_delete_require_approval
+}
+
+# Optional stricter batch cap (example — keep mutually exclusive with rules above):
+#   mail_modify_uids(args) := count(object.get(args, "uids", [])) if { is_array(object.get(args, "uids", [])) }
+#   decision = {"action": "deny", ...} if { input.tool == "mailMove"; mail_modify_uids(input.args) > 10 }

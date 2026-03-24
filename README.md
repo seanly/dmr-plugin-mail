@@ -1,6 +1,6 @@
 # dmr-plugin-mail
 
-External [DMR](https://github.com/seanly/dmr) plugin (HashiCorp go-plugin) that exposes **SMTP send** and **IMAP list/read** tools: `mailSend`, `mailList`, `mailRead`.
+External [DMR](https://github.com/seanly/dmr) plugin (HashiCorp go-plugin) that exposes **SMTP send** and **IMAP** tools: `mailSend`, `mailList`, `mailRead`, `mailMove`, `mailDelete`.
 
 ## Build
 
@@ -45,11 +45,19 @@ Paths under `attachment_root` (or workspace / `config_base_dir` when `attachment
 
 ## Tools
 
-| Tool       | Purpose |
-| ---------- | ------- |
-| `mailSend` | Send mail (plain, optional HTML multipart, optional file attachments). |
-| `mailList` | IMAP `SEARCH` + `FETCH` envelope metadata; `limit` capped at **200**; optional `unreadOnly`, `since`, `before` (RFC3339 or `YYYY-MM-DD`). |
-| `mailRead` | Fetch one message by **`uid`** or **`messageId`**; body prefers `text/plain` then `text/html`, truncated to `max_body_chars` (per-arg or config). Uses `BODY.PEEK[]` so messages are not marked read. |
+| Tool         | Purpose |
+| ------------ | ------- |
+| `mailSend`   | Send mail (plain, optional HTML multipart, optional file attachments). |
+| `mailList`   | IMAP `SEARCH` + `FETCH` envelope metadata; `limit` capped at **200**; optional `unreadOnly`, `since`, `before` (RFC3339 or `YYYY-MM-DD`). Each item includes **`uid`** (use with `mailMove` / `mailDelete` in the **same** `folder`). |
+| `mailRead`   | Fetch one message by **`uid`** or **`messageId`**; body prefers `text/plain` then `text/html`, truncated to `max_body_chars` (per-arg or config). Uses `BODY.PEEK[]` so messages are not marked read. Returns **`uid`** for follow-up moves/deletes. |
+| `mailMove`   | Move messages by IMAP UID: `folder`, **`targetFolder`**, **`uids`** (array). Up to **50** UIDs per call. Server may use RFC `MOVE` or `COPY` + `\Deleted` + `EXPUNGE`. |
+| `mailDelete` | Delete by UID: **`uids`** + optional `folder`. Marks `\Deleted` then **`EXPUNGE`**. **Important:** `EXPUNGE` removes **all** messages already marked deleted in that mailbox, not only the UIDs you passed, if others were left flagged. Up to **50** UIDs per batch (each marked then one expunge). |
+
+### Demo CLIs (local SMTP/IMAP checks)
+
+- `go run ./cmd/mail-smtp-demo/` — TLS + SMTP auth probe or test send.
+- `go run ./cmd/mail-imap-demo/` — TLS + IMAP login; optional `-list-folders` / `-select INBOX`.
+- `make demo-build` / `make imap-demo-build` compile `mail-smtp-demo` and `mail-imap-demo` binaries.
 
 ## Provider notes (Gmail / Microsoft 365)
 
@@ -69,6 +77,10 @@ Paths under `attachment_root` (or workspace / `config_base_dir` when `attachment
 - Keep mailbox secrets in config (`enc:` / `secret:`), not in tool arguments.
 - Tune `max_body_chars` and `list_default_limit` to keep model context small.
 - IMAP has no notion of “already processed by DMR”; use unread flags, `since`, or external tracking if needed.
+
+## OPA (`mail.rego`)
+
+This repo ships [`mail.rego`](mail.rego) for `opa_policy`: recipient checks for **`mailSend`**, optional approval for **`mailRead`**, and by default **`require_approval`** for **`mailMove`** and **`mailDelete`** (`mail_move_require_approval` / `mail_delete_require_approval`). Copy or include it under your `policies:` path and tune the flags.
 
 ## OPA example (`mailSend`)
 

@@ -7,7 +7,7 @@ import (
 	"github.com/seanly/dmr/pkg/plugin/proto"
 )
 
-// MailPlugin implements proto.DMRPluginInterface (SMTP send + IMAP list/read).
+// MailPlugin implements proto.DMRPluginInterface (SMTP send + IMAP list/read/move/delete).
 type MailPlugin struct {
 	cfg MailConfig
 }
@@ -95,6 +95,31 @@ func (p *MailPlugin) ProvideTools(req *proto.ProvideToolsRequest, resp *proto.Pr
 				}
 			}`,
 		},
+		{
+			Name:        "mailMove",
+			Description: "Move messages by IMAP UID from folder to targetFolder (RFC MOVE or COPY+DELETE fallback). UIDs come from mailList/mailRead for the same folder. At most 50 UIDs per call.",
+			ParametersJSON: `{
+				"type": "object",
+				"properties": {
+					"folder": {"type": "string", "description": "Source mailbox; default from config"},
+					"targetFolder": {"type": "string", "description": "Destination mailbox name (e.g. Trash, Junk)"},
+					"uids": {"type": "array", "items": {"type": "integer"}, "description": "IMAP UIDs to move"}
+				},
+				"required": ["targetFolder", "uids"]
+			}`,
+		},
+		{
+			Name:        "mailDelete",
+			Description: "Permanently delete messages by IMAP UID: marks \\Deleted then EXPUNGE. May expunge other messages already marked deleted in the same folder. UIDs from mailList/mailRead. At most 50 UIDs per call.",
+			ParametersJSON: `{
+				"type": "object",
+				"properties": {
+					"folder": {"type": "string", "description": "Mailbox; default from config"},
+					"uids": {"type": "array", "items": {"type": "integer"}, "description": "IMAP UIDs to delete"}
+				},
+				"required": ["uids"]
+			}`,
+		},
 	}
 	return nil
 }
@@ -115,6 +140,10 @@ func (p *MailPlugin) CallTool(req *proto.CallToolRequest, resp *proto.CallToolRe
 		result, err = p.execMailList(args)
 	case "mailRead":
 		result, err = p.execMailRead(args)
+	case "mailMove":
+		result, err = p.execMailMove(args)
+	case "mailDelete":
+		result, err = p.execMailDelete(args)
 	default:
 		err = fmt.Errorf("unknown tool: %s", req.Name)
 	}
