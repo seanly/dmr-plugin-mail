@@ -80,7 +80,7 @@ Paths under `attachment_root` (or workspace / `config_base_dir` when `attachment
 
 ## OPA (`mail.rego`)
 
-This repo ships [`mail.rego`](mail.rego) for `opa_policy`: recipient checks for **`mailSend`**, optional approval for **`mailRead`**, and by default **`require_approval`** for **`mailMove`** and **`mailDelete`** (`mail_move_require_approval` / `mail_delete_require_approval`). Copy or include it under your `policies:` path and tune the flags.
+This repo ships [`policies/mail.rego`](policies/mail.rego) for `opa_policy`: recipient checks for **`mailSend`**, optional approval for **`mailRead`**, and by default **`require_approval`** for **`mailMove`** and **`mailDelete`** (`mail_move_require_approval` / `mail_delete_require_approval`). Copy or include it under your `policies:` path and tune the flags.
 
 ## OPA example (`mailSend`)
 

@@ -14,9 +14,6 @@
 
 package dmr
 
-import future.keywords.if
-import future.keywords.in
-
 # ---------------------------------------------------------------------------
 # Tunables (edit for your org)
 # ---------------------------------------------------------------------------
@@ -68,7 +65,7 @@ mail_domain_allowed(addr) if {
 # ---------------------------------------------------------------------------
 
 # Deny when domain allowlist is enabled and any recipient domain is not allowed.
-decision = {"action": "deny", "reason": "mailSend: recipient domain not allowed", "risk": "high"} if {
+decision := {"action": "deny", "reason": "mailSend: recipient domain not allowed", "risk": "high"} if {
 	input.tool == "mailSend"
 	domain_enforcement_enabled
 	recipients := mail_recipients(input.args)
@@ -78,26 +75,15 @@ decision = {"action": "deny", "reason": "mailSend: recipient domain not allowed"
 }
 
 # Otherwise outbound mail requires approval (high risk).
-decision = {"action": "require_approval", "reason": reason_with_scope("mail send"), "risk": "high"} if {
+decision := {"action": "require_approval", "reason": reason_with_scope("mail send"), "risk": "high"} if {
 	input.tool == "mailSend"
-	not mail_send_domain_denied
-}
-
-# True when the deny rule above would apply (keeps require_approval mutually exclusive).
-mail_send_domain_denied if {
-	input.tool == "mailSend"
-	domain_enforcement_enabled
-	recipients := mail_recipients(input.args)
-	count(recipients) > 0
-	some addr in recipients
-	not mail_domain_allowed(addr)
 }
 
 # ---------------------------------------------------------------------------
 # mailRead (optional)
 # ---------------------------------------------------------------------------
 
-decision = {"action": "require_approval", "reason": reason_with_scope("mail read"), "risk": "medium"} if {
+decision := {"action": "require_approval", "reason": reason_with_scope("mail read"), "risk": "medium"} if {
 	input.tool == "mailRead"
 	mail_read_require_approval
 }
@@ -106,12 +92,12 @@ decision = {"action": "require_approval", "reason": reason_with_scope("mail read
 # mailMove / mailDelete (IMAP)
 # ---------------------------------------------------------------------------
 
-decision = {"action": "require_approval", "reason": reason_with_scope("mail move"), "risk": "high"} if {
+decision := {"action": "require_approval", "reason": reason_with_scope("mail move"), "risk": "high"} if {
 	input.tool == "mailMove"
 	mail_move_require_approval
 }
 
-decision = {"action": "require_approval", "reason": reason_with_scope("mail delete"), "risk": "high"} if {
+decision := {"action": "require_approval", "reason": reason_with_scope("mail delete"), "risk": "high"} if {
 	input.tool == "mailDelete"
 	mail_delete_require_approval
 }

@@ -1,7 +1,8 @@
-.PHONY: build demo-build imap-demo-build test vet tidy clean install cross-build
+.PHONY: build demo-build imap-demo-build test vet tidy clean install install-policy cross-build
 
 BINARY := dmr-plugin-mail
 INSTALL_DIR := $(HOME)/.dmr/plugins
+POLICY_DIR := $(HOME)/.dmr/etc/policies
 
 build: tidy
 	go build -o $(BINARY) .
@@ -32,6 +33,10 @@ cross-build: tidy
 install: build
 	mkdir -p $(INSTALL_DIR)
 	cp $(BINARY) $(INSTALL_DIR)/
+
+install-policy:
+	mkdir -p $(POLICY_DIR)
+	cp policies/mail.rego $(POLICY_DIR)/
 
 clean:
 	rm -f $(BINARY) mail-smtp-demo mail-imap-demo
